@@ -1,10 +1,8 @@
 import argparse
-
-import pandas as pd
+import json
 from astropy.time import Time
-from emgwcave.kowalski_utils import search_in_skymap, connect_kowalski, \
-    default_projection_kwargs
-from emgwcave.plotting import plot_skymap, save_thumbnails, make_full_pdf
+from emgwcave.kowalski_utils import connect_kowalski
+from emgwcave.plotting import save_thumbnails, make_full_pdf
 from emgwcave.candidate_utils import save_candidates_to_file, \
     append_photometry_to_candidates, write_photometry_to_file, get_thumbnails, \
     deduplicate_candidates, \
@@ -12,9 +10,10 @@ from emgwcave.candidate_utils import save_candidates_to_file, \
 from time import sleep
 import os
 
-from copy import deepcopy
 from pathlib import Path
-from ztf_galactic_plane.galactic_plane_queries import search_hostless_galactic_plane_candidates, filter_galactic_plane_candidates
+from ztf_galactic_plane.galactic_plane_queries import \
+    (filter_galactic_plane_candidates,
+     search_galactic_plane_candidates)
 import numpy as np
 
 
@@ -28,12 +27,12 @@ def setup_output_directories(output_dir: str):
     return phot_dir, thumbnails_dir
 
 
-def plot_galactic_candidates(all_candidates, plotfile):
+def plot_galactic_candidates(all_candidates, plotfile, kowalski):
     all_candidates = deduplicate_candidates(all_candidates)
 
-    all_candidates = get_candidates_crossmatch(all_candidates)
+    all_candidates = get_candidates_crossmatch(all_candidates, k=kowalski)
     all_candidates = annotate_candidates(all_candidates)
-    all_candidates = get_thumbnails(all_candidates)
+    all_candidates = get_thumbnails(all_candidates, k=kowalski)
     save_thumbnails(all_candidates,
                     thumbnails_dir=thumbnails_dir,
                     plot=args.plot_thumbnails_separately)
@@ -48,8 +47,8 @@ def plot_galactic_candidates(all_candidates, plotfile):
                   )
 
 
-
-def find_galactic_candidates(start_date_jd: float,
+def find_galactic_candidates(kowalski,
+                             start_date_jd: float,
                              end_date_jd: float,
                              instrument: str = 'ZTF',
                              outdir='galactic_plane_output',
@@ -58,7 +57,6 @@ def find_galactic_candidates(start_date_jd: float,
     # Set up Kowalski connection and run query
     # Split queries into 0.5 day chunks to avoid timeouts
     all_candidates = np.array([])
-    kowalski = connect_kowalski()
     iter_counter = 0
     savefile = os.path.join(outdir, f"galactic_plane_candidates_{instrument}"
                                     f"_alerts_{round(start_date_jd, 2)}_"
@@ -74,15 +72,19 @@ def find_galactic_candidates(start_date_jd: float,
         jd_end = jd_start + jd_interval
         print(f"Searching for candidates between {jd_start} and {jd_end}")
         try:
-            candidates = search_hostless_galactic_plane_candidates(k=kowalski,
-                                                               jd_start=jd_start,
-                                                               jd_end=jd_start + jd_interval,
-                                                               catalog=f'{instrument}_alerts',
-                                                               max_n_threads=nthreads,
-                                                               )
-        except:
+            candidates = search_galactic_plane_candidates(k=kowalski,
+                                                              jd_start=jd_start,
+                                                              jd_end=jd_start + jd_interval,
+                                                              catalog=f'{instrument}_alerts',
+                                                              max_n_threads=nthreads,
+                                                              )
+        except Exception as e:
             # Try with a smaller chunk size ten times smaller, for the next ten iterations.
-            print(f"Timeout error:. Trying with smaller chunk size.")
+            if jd_interval <= 0.01:
+                print(f"{e}: {jd_start} to {jd_end}. "
+                      f"Giving up after trying 10 times with smaller chunk size {jd_interval}.")
+                break
+            print(f"{e}: Trying with smaller chunk size.")
             jd_interval /= 10
             resume_iter = iter_counter + 10
             continue
@@ -94,9 +96,9 @@ def find_galactic_candidates(start_date_jd: float,
         iter_counter += 1
         candidates = filter_galactic_plane_candidates(candidates)
         print(f"Found {len(candidates)} candidates "
-              f"between {jd_start} and {jd_end}")
+              f"between {jd_start - jd_interval} and {jd_end}")
         # Get full photometry history for the selected candidates
-        candidates = append_photometry_to_candidates(candidates)
+        candidates = append_photometry_to_candidates(candidates, k=kowalski)
 
         all_candidates = np.append(all_candidates, candidates)
 
@@ -145,17 +147,20 @@ if __name__ == '__main__':
     savefile = os.path.join(output_dir,
                             f"galactic_plane_candidates"
                             f"_{args.instrument}_alerts"
-                            f"_{round(start_date_jd, 2)}_{round(end_date_jd, 2)}"
+                            f"_{args.start_date}_{args.end_date}"
                             f".csv")
 
     phot_dir, thumbnails_dir = setup_output_directories(output_dir)
 
-    selected_candidates = find_galactic_candidates(instrument=args.instrument,
+    kowalski = connect_kowalski()
+
+    selected_candidates = find_galactic_candidates(kowalski=kowalski,
+                                                   instrument=args.instrument,
                                                    start_date_jd=start_date_jd,
                                                    end_date_jd=end_date_jd,
                                                    nthreads=args.nthreads,
-                                                   outdir=output_dir, )
+                                                   outdir=output_dir)
 
     print(f"Found {len(selected_candidates)} candidates in total.")
     plotfile = savefile.replace('.csv', '.pdf')
-    plot_galactic_candidates(selected_candidates, plotfile)
+    plot_galactic_candidates(selected_candidates, plotfile, kowalski=kowalski)

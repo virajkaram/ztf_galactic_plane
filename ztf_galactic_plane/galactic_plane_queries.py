@@ -1,20 +1,36 @@
-from emgwcave.kowalski_utils import connect_kowalski, get_find_query, query_aux_alerts
+from emgwcave.kowalski_utils import  get_find_query
 
 
-def search_hostless_galactic_plane_candidates(k, jd_start: float, jd_end: float,
-                                              catalog: str='ZTF_alerts',
-                                              filter_kwargs: dict = {},
-                                              max_n_threads: int = 8):
+def search_galactic_plane_candidates(k, jd_start: float, jd_end: float,
+                                     catalog: str='ZTF_alerts',
+                                     filter_kwargs: dict = {},
+                                     max_n_threads: int = 8):
     """Search for candidates in the galactic plane using Kowalski."""
+    magamp = 4.0
     query = get_find_query(
         catalog=catalog,
-        filter={'candidate.jd': {'$gte': jd_start, '$lte': jd_end},
-                "coordinates.b": {"$gt": -10, "$lt": 10},
-                "candidate.drb": {"$gt": 0.95},
-                "candidate.isdiffpos": 't',
-                "candidate.distpsnr1": {"$gt": 2.0},
-                "candidate.ndethist": {"$gt": 20},
-                },
+        filter={
+            "candidate.jd": {"$gt": jd_start, "$lt": jd_end},
+            "candidate.drb": {"$gt": 0.5},
+            "candidate.ndethist": {"$gt": 5},
+            "candidate.isdiffpos": {'$in': ['t', '1', True, 1]},
+            "coordinates.b": {"$gt": -10, "$lt": 10},
+            "$or": [
+                {"candidate.distpsnr1": {"$gt": 2.0}},
+                {"$and":
+                    [{"candidate.distpsnr1": {"$lt": 2.0}},
+                     {"$expr": {"$gt": [
+                        {"$subtract": ["$candidate.srmag1", "$candidate.magpsf"]},
+                        magamp]}}]},
+                {"$and": [{"candidate.distpsnr1": {"$lt": 2.0}},
+                            {"candidate.srmag1": {"$eq": -999.0}},
+                          {"$or": [{"candidate.distpsnr2": {"$lt": 2.0}},
+                                   {"$expr":
+                                       {"$gt": [{"$subtract": [
+                                          "$candidate.srmag2", "$candidate.magpsf"]},
+                                                        magamp]}}]}]}
+                    ],
+        },
         projection={'_id': 0,
                     'cutoutScience': 0,
                     'cutoutTemplate': 0,
@@ -25,6 +41,7 @@ def search_hostless_galactic_plane_candidates(k, jd_start: float, jd_end: float,
 
     candidates = k.query(query=query, use_batch_query=True, max_n_threads=max_n_threads)
     return candidates['default']['data']
+
 
 
 def filter_galactic_plane_candidates(candidates: list[dict]):
