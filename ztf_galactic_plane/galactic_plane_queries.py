@@ -49,6 +49,8 @@ def filter_galactic_plane_candidates(candidates: list[dict]):
     filtered_candidates = []
     for candidate in candidates:
         candidate['candidate']['deltajd'] = candidate['candidate']['jdendhist'] - candidate['candidate']['jdstarthist']
-        if (20 < candidate['candidate']['deltajd']) and (candidate['candidate']['deltajd'] < 200) :
+        if (((20 < candidate['candidate']['deltajd']) and (candidate['candidate']['deltajd'] < 200))
+                and
+                ((candidate['candidate']['ssdistnr']>2) or (candidate['candidate']['ssdistnr']<-0.5))) :
             filtered_candidates.append(candidate)
     return filtered_candidates

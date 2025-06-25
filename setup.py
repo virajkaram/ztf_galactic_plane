@@ -26,9 +26,6 @@ setuptools.setup(
         "penquins @ git+https://github.com/virajkaram/penquins.git@skymap_queries ",
         "matplotlib",
         "requests",
-        "typing",
-        "fastavro",
-        "ligo.skymap",
     ],
     package_data={
     }
