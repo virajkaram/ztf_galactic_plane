@@ -1,5 +1,4 @@
 import argparse
-import json
 from astropy.time import Time
 from emgwcave.kowalski_utils import connect_kowalski
 from emgwcave.plotting import save_thumbnails, make_full_pdf
@@ -13,7 +12,7 @@ import os
 from pathlib import Path
 from ztf_galactic_plane.galactic_plane_queries import \
     (filter_galactic_plane_candidates,
-     search_galactic_plane_candidates)
+     search_galactic_plane_candidates, filter_candidate_duration)
 import numpy as np
 
 
@@ -99,6 +98,7 @@ def find_galactic_candidates(kowalski,
               f"between {jd_start - jd_interval} and {jd_end}")
         # Get full photometry history for the selected candidates
         candidates = append_photometry_to_candidates(candidates, k=kowalski)
+        candidates = filter_candidate_duration(candidates)
 
         all_candidates = np.append(all_candidates, candidates)
 

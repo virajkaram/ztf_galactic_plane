@@ -1,4 +1,6 @@
 from emgwcave.kowalski_utils import  get_find_query
+from emgwcave.candidate_utils import make_photometry
+import numpy as np
 
 
 def search_galactic_plane_candidates(k, jd_start: float, jd_end: float,
@@ -53,4 +55,16 @@ def filter_galactic_plane_candidates(candidates: list[dict]):
                 and
                 ((candidate['candidate']['ssdistnr']>2) or (candidate['candidate']['ssdistnr']<-0.5))) :
             filtered_candidates.append(candidate)
+    return filtered_candidates
+
+
+def filter_candidate_duration(candidates: list[dict]):
+    filtered_candidates = []
+    for candidate in candidates:
+        photometry_df = make_photometry(candidate)
+        detected = np.isfinite(photometry_df["magpsf"])
+        age = photometry_df[detected]['mjd'].max() - photometry_df[detected]['mjd'].min()
+        if 20 < age < 200:
+            filtered_candidates.append(candidate)
+
     return filtered_candidates
