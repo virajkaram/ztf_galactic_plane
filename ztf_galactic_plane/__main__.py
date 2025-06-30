@@ -12,7 +12,8 @@ import os
 from pathlib import Path
 from ztf_galactic_plane.galactic_plane_queries import \
     (filter_galactic_plane_candidates,
-     search_galactic_plane_candidates, filter_candidate_duration)
+     search_galactic_plane_candidates, filter_candidate_duration,
+     search_galactic_plane_candidates_from_fields)
 import numpy as np
 
 
@@ -52,6 +53,7 @@ def find_galactic_candidates(kowalski,
                              instrument: str = 'ZTF',
                              outdir='galactic_plane_output',
                              nthreads: int = 8,
+                             use_fields_query: bool = False,
                              ):
     # Set up Kowalski connection and run query
     # Split queries into 0.5 day chunks to avoid timeouts
@@ -71,12 +73,21 @@ def find_galactic_candidates(kowalski,
         jd_end = jd_start + jd_interval
         print(f"Searching for candidates between {jd_start} and {jd_end}")
         try:
-            candidates = search_galactic_plane_candidates(k=kowalski,
-                                                              jd_start=jd_start,
-                                                              jd_end=jd_start + jd_interval,
-                                                              catalog=f'{instrument}_alerts',
-                                                              max_n_threads=nthreads,
-                                                              )
+            if not use_fields_query:
+                candidates = search_galactic_plane_candidates(k=kowalski,
+                                                                  jd_start=jd_start,
+                                                                  jd_end=jd_start + jd_interval,
+                                                                  catalog=f'{instrument}_alerts',
+                                                                  max_n_threads=nthreads,
+                                                                  )
+            else:
+                candidates = search_galactic_plane_candidates_from_fields(k=kowalski,
+                                                                          jd_start=jd_start,
+                                                                          jd_end=jd_start + jd_interval,
+                                                                          catalog=f'{instrument}_alerts',
+                                                                          max_n_threads=nthreads,
+                                                                          )
+
         except Exception as e:
             # Try with a smaller chunk size ten times smaller, for the next ten iterations.
             if jd_interval <= 0.01:
@@ -141,6 +152,8 @@ if __name__ == '__main__':
 
     end_date_jd = Time(args.end_date).jd
 
+    # Query by fields for ZTF candidates in 2020 and older.
+    use_fields_query = (start_date_jd < 2459215.5)
     # Set up paths and directories
     output_dir = args.outdir
 
