@@ -172,7 +172,9 @@ if __name__ == '__main__':
                                                    start_date_jd=start_date_jd,
                                                    end_date_jd=end_date_jd,
                                                    nthreads=args.nthreads,
-                                                   outdir=output_dir)
+                                                   outdir=output_dir,
+                                                   use_fields_query=use_fields_query,
+                                                   )
 
     print(f"Found {len(selected_candidates)} candidates in total.")
     plotfile = savefile.replace('.csv', '.pdf')
